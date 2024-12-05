@@ -1,0 +1,42 @@
+# Dependencies
+FROM node:20-alpine3.20 AS deps
+
+WORKDIR /usr/src/app
+
+COPY package*.json ./
+
+RUN yarn install
+
+
+# Builder
+FROM node:20-alpine3.20 AS builder
+
+WORKDIR /usr/src/app
+
+# Copy dependencies from deps
+COPY --from=deps /usr/src/app/node_modules ./node_modules
+
+# Copy source files
+COPY . .
+
+RUN yarn build
+
+RUN yarn install --production=true && yarn cache clean
+
+RUN npx prisma generate
+
+# Create final image
+FROM node:20-alpine3.20 AS prod
+
+COPY --from=builder /usr/src/app/node_modules ./node_modules
+
+# Copy dist directory
+COPY --from=builder /usr/src/app/dist ./dist
+
+ENV NODE_ENV=production
+
+USER node
+
+EXPOSE 3000
+
+CMD ["node", "dist/main.js"]
